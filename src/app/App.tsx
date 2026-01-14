@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { SplashScreen } from '@/app/screens/SplashScreen';
 import { RoleSelectionScreen } from '@/app/screens/RoleSelectionScreen';
 import { LoginScreen } from '@/app/screens/LoginScreen';
@@ -14,6 +14,8 @@ import { JobProgressScreen } from '@/app/screens/JobProgressScreen';
 import { AdminDashboardScreen } from '@/app/screens/AdminDashboardScreen';
 import { AdminWorkerManagementScreen } from '@/app/screens/AdminWorkerManagementScreen';
 import { HomePage } from '@/app/website/HomePage';
+import { FirebaseProvider, useFirebase } from '@/app/context/FirebaseContext';
+import { ResponsiveShell } from '@/app/components/ResponsiveShell';
 
 type AppView =
   | 'website'
@@ -32,31 +34,49 @@ type AppView =
   | 'admin-dashboard'
   | 'admin-worker-management';
 
-export default function App() {
+function AppContent() {
+  const { currentUser, login, logout } = useFirebase();
   const [currentView, setCurrentView] = useState<AppView>('website');
-  const [selectedRole, setSelectedRole] = useState('');
-  const [userData, setUserData] = useState({ name: '', phone: '', village: '' });
+
+  // Local state for navigation params (id, category, etc.)
   const [selectedCategory, setSelectedCategory] = useState('');
   const [selectedService, setSelectedService] = useState('');
   const [selectedWorkerId, setSelectedWorkerId] = useState('');
   const [selectedRequestId, setSelectedRequestId] = useState('');
-  const [requestStatus, setRequestStatus] = useState<'pending' | 'accepted' | 'rejected' | 'in-progress' | 'completed'>('pending');
+  const [requestStatus, setRequestStatus] = useState<'pending' | 'accepted' | 'rejected' | 'user_started' | 'in-progress' | 'worker_completed' | 'completed'>('pending');
+  const [initialRole, setInitialRole] = useState('user');
 
-  // Navigation functions
-  const handleSelectRole = (role: string) => {
-    setSelectedRole(role);
-    setCurrentView('login');
+  // Effect to redirect based on auth status
+  useEffect(() => {
+    if (currentUser) {
+      if (currentUser.role === 'user' && (currentView === 'login' || currentView === 'website')) {
+        setCurrentView('user-home');
+      } else if (currentUser.role === 'worker' && (currentView === 'login' || currentView === 'website')) {
+        setCurrentView('worker-dashboard');
+      } else if (currentUser.role === 'admin' && (currentView === 'login' || currentView === 'website')) {
+        setCurrentView('admin-dashboard');
+      }
+    } else {
+      // If logged out
+      if (currentView !== 'login' && currentView !== 'website' && currentView !== 'splash') {
+        setCurrentView('website');
+      }
+    }
+  }, [currentUser, currentView]);
+
+  const handleLogin = async () => {
+    // Login details handled within LoginScreen via Context
   };
 
-  const handleLogin = (data: { name: string; phone: string; village: string }) => {
-    setUserData(data);
-    if (selectedRole === 'user') {
-      setCurrentView('user-home');
-    } else if (selectedRole === 'worker') {
-      setCurrentView('worker-dashboard');
-    } else if (selectedRole === 'admin') {
-      setCurrentView('admin-dashboard');
-    }
+  const handleLogout = () => {
+    logout();
+    setCurrentView('website');
+  };
+
+  // Navigation Handlers
+  const handleSelectRole = (role: string) => {
+    setInitialRole(role);
+    setCurrentView('login');
   };
 
   const handleSelectCategory = (category: string) => {
@@ -78,7 +98,8 @@ export default function App() {
     setCurrentView('request-service');
   };
 
-  const handleSubmitRequest = () => {
+  const handleSubmitRequest = (requestId: string) => {
+    setSelectedRequestId(requestId);
     setRequestStatus('pending');
     setCurrentView('request-status');
   };
@@ -96,19 +117,33 @@ export default function App() {
     setCurrentView('worker-dashboard');
   };
 
-  // Render current view
   const renderView = () => {
     switch (currentView) {
       case 'website':
-        return <HomePage />;
+        return <HomePage onLoginClick={() => setCurrentView('login')} />;
       case 'splash':
         return <SplashScreen />;
       case 'role-selection':
         return <RoleSelectionScreen onSelectRole={handleSelectRole} />;
       case 'login':
-        return <LoginScreen onLogin={handleLogin} onBack={() => setCurrentView('role-selection')} />;
+        return <LoginScreen onLogin={handleLogin} onBack={() => setCurrentView('website')} initialRole={initialRole} />;
+
+      // User Flow
       case 'user-home':
-        return <UserHomeScreen village={userData.village} onSelectCategory={handleSelectCategory} />;
+        return currentUser?.role === 'user' ? (
+          <UserHomeScreen
+            village={currentUser.village}
+            onSelectCategory={handleSelectCategory}
+            onSelectRequest={(requestId) => {
+              setSelectedRequestId(requestId);
+              // We don't have the status readily available here to setRequestStatus, 
+              // but RequestStatusScreen fetches data by ID now, so passed status might be redundant 
+              // OR we can just set it to 'pending' temporarily as the screen will resolve it. 
+              // Better: Let's rely on the screen fetching.
+              setCurrentView('request-status');
+            }}
+          />
+        ) : null;
       case 'service-list':
         return <ServiceListScreen category={selectedCategory} onSelectService={handleSelectService} onBack={() => setCurrentView('user-home')} />;
       case 'worker-list':
@@ -116,69 +151,85 @@ export default function App() {
       case 'worker-detail':
         return <WorkerDetailScreen workerId={selectedWorkerId} onRequestService={handleRequestService} onBack={() => setCurrentView('worker-list')} />;
       case 'request-service':
-        return <RequestServiceScreen workerName="Ravi Kumar" onSubmitRequest={handleSubmitRequest} onBack={() => setCurrentView('worker-detail')} />;
+        return <RequestServiceScreen workerId={selectedWorkerId} onSubmitRequest={handleSubmitRequest} onBack={() => setCurrentView('worker-detail')} />;
       case 'request-status':
-        return <RequestStatusScreen status={requestStatus} onBack={() => setCurrentView('user-home')} />;
+        return <RequestStatusScreen
+          status={requestStatus}
+          onBack={() => setCurrentView('user-home')}
+          requestId={selectedRequestId}
+          onBookAgain={(workerId) => {
+            setSelectedWorkerId(workerId);
+            setCurrentView('worker-detail');
+          }}
+        />;
+
+      // Worker Flow
       case 'worker-dashboard':
-        return <WorkerDashboardScreen onSelectRequest={handleSelectRequest} />;
+        return currentUser?.role === 'worker' ? (
+          <WorkerDashboardScreen
+            onSelectRequest={handleSelectRequest}
+            onResumeJob={(requestId) => {
+              setSelectedRequestId(requestId);
+              setCurrentView('job-progress');
+            }}
+          />
+        ) : null;
       case 'worker-request-detail':
         return <WorkerRequestDetailScreen requestId={selectedRequestId} onAccept={handleAcceptRequest} onReject={handleRejectRequest} onBack={() => setCurrentView('worker-dashboard')} />;
       case 'job-progress':
-        return <JobProgressScreen onBack={() => setCurrentView('worker-dashboard')} />;
+        return <JobProgressScreen onBack={() => setCurrentView('worker-dashboard')} requestId={selectedRequestId} />;
+
+      // Admin Flow
       case 'admin-dashboard':
         return <AdminDashboardScreen onManageWorkers={() => setCurrentView('admin-worker-management')} />;
       case 'admin-worker-management':
         return <AdminWorkerManagementScreen onBack={() => setCurrentView('admin-dashboard')} />;
+
       default:
-        return <HomePage />;
+        return <HomePage onLoginClick={() => setCurrentView('login')} />;
     }
   };
 
   return (
     <div className="min-h-screen bg-[#F7F8FC]">
-      {/* View Switcher for Demo */}
-      {currentView === 'website' && (
-        <div className="fixed top-4 right-4 z-50 bg-white rounded-xl shadow-lg p-4 max-w-xs">
-          <h4 className="text-[#1A2238] mb-3">View Demo Screens</h4>
-          <div className="space-y-2">
-            <button onClick={() => setCurrentView('role-selection')} className="w-full px-4 py-2 bg-[#FF6A3D] text-white rounded-lg hover:bg-[#EF5A2D] transition-colors">
-              Start Mobile App Demo
-            </button>
-          </div>
-          <div className="mt-3 pt-3 border-t border-gray-200">
-            <p className="text-xs text-[#2E2E2E] opacity-70 mb-2">Quick Jump To:</p>
-            <div className="space-y-1">
-              <button onClick={() => { setSelectedRole('user'); setUserData({ name: 'Demo', phone: '1234567890', village: 'Thanjavur' }); setCurrentView('user-home'); }} className="w-full px-3 py-1 text-sm text-[#1A2238] hover:bg-gray-100 rounded text-left">
-                User Flow
-              </button>
-              <button onClick={() => { setSelectedRole('worker'); setCurrentView('worker-dashboard'); }} className="w-full px-3 py-1 text-sm text-[#1A2238] hover:bg-gray-100 rounded text-left">
-                Worker Flow
-              </button>
-              <button onClick={() => { setSelectedRole('admin'); setCurrentView('admin-dashboard'); }} className="w-full px-3 py-1 text-sm text-[#1A2238] hover:bg-gray-100 rounded text-left">
-                Admin Flow
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Mobile Screens Display */}
-      {currentView !== 'website' && (
-        <div className="fixed top-4 left-4 z-50 bg-white rounded-xl shadow-lg p-3">
-          <button onClick={() => setCurrentView('website')} className="px-4 py-2 bg-[#1A2238] text-white rounded-lg hover:bg-[#2A3248] transition-colors text-sm">
-            ← Back to Website
-          </button>
-        </div>
-      )}
-
-      {/* Main Content */}
+      {/* Main Content with Responsive Shell */}
       {currentView === 'website' ? (
         renderView()
       ) : (
-        <div className="flex items-center justify-center min-h-screen p-8">
+        <ResponsiveShell
+          onHome={() => {
+            if (currentUser?.role === 'worker') setCurrentView('worker-dashboard');
+            else if (currentUser?.role === 'admin') setCurrentView('admin-dashboard');
+            else setCurrentView('user-home'); // Default to user home or login if null, but shell is mostly for auth'd views or flows
+          }}
+          onBack={
+            // Define Back Logic Based on View
+            currentView === 'service-list' ? () => setCurrentView('user-home') :
+              currentView === 'worker-list' ? () => setCurrentView('service-list') :
+                currentView === 'worker-detail' ? () => setCurrentView('worker-list') :
+                  currentView === 'request-service' ? () => setCurrentView('worker-detail') :
+                    currentView === 'request-status' ? () => setCurrentView('user-home') :
+                      currentView === 'worker-request-detail' ? () => setCurrentView('worker-dashboard') :
+                        currentView === 'job-progress' ? () => setCurrentView('worker-dashboard') :
+                          currentView === 'admin-worker-management' ? () => setCurrentView('admin-dashboard') :
+                            currentView === 'login' ? () => setCurrentView('website') :
+                              undefined
+          }
+        >
           {renderView()}
-        </div>
+        </ResponsiveShell>
       )}
     </div>
+  );
+}
+
+import { Toaster } from 'sonner';
+
+export default function App() {
+  return (
+    <FirebaseProvider>
+      <AppContent />
+      <Toaster position="top-center" richColors />
+    </FirebaseProvider>
   );
 }

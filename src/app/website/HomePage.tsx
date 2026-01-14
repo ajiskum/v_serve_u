@@ -1,36 +1,40 @@
 import { Button } from '@/app/components/Button';
 
-export function HomePage() {
+interface HomePageProps {
+  onLoginClick?: () => void;
+}
+
+export function HomePage({ onLoginClick }: HomePageProps) {
   const features = [
     {
       icon: '🤝',
       title: 'Community Driven',
-      description: 'Local people providing services for their own villages',
+      description: 'Connect with workers from your own village'
     },
     {
       icon: '✅',
-      title: 'Trusted Workers',
-      description: 'Verified and rated service providers from your area',
-    },
-    {
-      icon: '📱',
-      title: 'Simple to Use',
-      description: 'Easy interface designed for everyone',
+      title: 'Verified Workers',
+      description: 'All workers are verified by village administration'
     },
     {
       icon: '⚡',
-      title: 'Quick Service',
-      description: 'Get help when you need it, same day service available',
+      title: 'Fast Service',
+      description: 'Get help quickly when you need it most'
     },
+    {
+      icon: '💬',
+      title: 'Local Language',
+      description: 'App usage in Tamil and English'
+    }
   ];
 
   const services = [
-    { name: 'Electrician', icon: '⚡' },
-    { name: 'Plumber', icon: '🔧' },
-    { name: 'Carpenter', icon: '🪚' },
-    { name: 'House Cleaning', icon: '🏠' },
-    { name: 'Farm Labor', icon: '🌾' },
-    { name: 'Daily Help', icon: '🤝' },
+    { icon: '🔌', name: 'Electrical' },
+    { icon: '🚰', name: 'Plumbing' },
+    { icon: '🧹', name: 'Cleaning' },
+    { icon: '🚜', name: 'Agriculture' },
+    { icon: '🔨', name: 'Construction' },
+    { icon: '🚚', name: 'Transport' }
   ];
 
   return (
@@ -47,7 +51,7 @@ export function HomePage() {
               <a href="#services" className="text-[#2E2E2E] hover:text-[#1A2238]">Services</a>
               <a href="#how-it-works" className="text-[#2E2E2E] hover:text-[#1A2238]">How it Works</a>
               <a href="#join" className="text-[#2E2E2E] hover:text-[#1A2238]">Join as Worker</a>
-              <Button variant="accent" size="sm">Login</Button>
+              <Button variant="accent" size="sm" onClick={onLoginClick}>Login</Button>
             </div>
           </div>
         </div>
@@ -69,8 +73,8 @@ export function HomePage() {
                 From electricians to farm labor, find the help you need from your own community.
               </p>
               <div className="flex flex-col sm:flex-row gap-4">
-                <Button variant="accent" size="lg">Find Services</Button>
-                <Button variant="secondary" size="lg">Join as Worker</Button>
+                <Button variant="accent" size="lg" onClick={onLoginClick}>Find Services</Button>
+                <Button variant="secondary" size="lg" onClick={onLoginClick}>Join as Worker</Button>
               </div>
             </div>
             <div className="hidden md:flex items-center justify-center">

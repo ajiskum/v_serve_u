@@ -1,3 +1,4 @@
+import { useFirebase } from '@/app/context/FirebaseContext';
 import { MobileFrame } from '@/app/components/MobileFrame';
 import { Button } from '@/app/components/Button';
 import { motion } from 'framer-motion';
@@ -9,16 +10,28 @@ interface WorkerDetailScreenProps {
 }
 
 export function WorkerDetailScreen({ workerId, onRequestService, onBack }: WorkerDetailScreenProps) {
-  // Mock worker data
-  const worker = {
-    name: 'Ravi Kumar',
-    village: 'Thanjavur',
-    experience: 8,
-    rating: 4.8,
-    available: true,
-    services: ['Electrical Wiring', 'Fan Installation', 'Switch Board Repair', 'Motor Repair'],
-    about: 'Experienced electrician serving Thanjavur and nearby areas. Quick and reliable service.',
-  };
+  const { getWorkerById, getWorkerStats } = useFirebase();
+  const worker = getWorkerById(workerId);
+  const stats = getWorkerStats(workerId);
+
+  if (!worker) {
+    return (
+      <MobileFrame title="Worker Details" showBack onBack={onBack}>
+        <div className="flex items-center justify-center min-h-[600px]">
+          <p className="text-gray-500">Worker not found or loading...</p>
+        </div>
+      </MobileFrame>
+    );
+  }
+
+  // Normalize data for display
+  const displayServices = worker.services || [];
+  const displayVillage = worker.location?.village || worker.village || 'Unknown';
+  const displayRating = stats.averageRating;
+  const displayJobs = stats.totalJobs;
+  const displayExp = worker.experienceYears || 0;
+  const displayBio = worker.bio || "No description provided.";
+  const isAvailable = worker.availabilityStatus === 'Available';
 
   return (
     <MobileFrame title="Worker Details" showBack onBack={onBack}>
@@ -70,16 +83,16 @@ export function WorkerDetailScreen({ workerId, onRequestService, onBack }: Worke
                   <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" />
                   <circle cx="12" cy="10" r="3" />
                 </svg>
-                <span>{worker.village}</span>
+                <span>{displayVillage}</span>
               </motion.div>
               <motion.span
-                className={`inline-flex px-3 py-1 ${worker.available ? 'bg-[#4CAF50]' : 'bg-[#E8E8E8]'} text-white rounded-full text-sm`}
+                className={`inline-flex px-3 py-1 ${isAvailable ? 'bg-[#4CAF50]' : 'bg-[#E8E8E8]'} text-white rounded-full text-sm`}
                 initial={{ scale: 0 }}
                 animate={{ scale: 1 }}
                 transition={{ delay: 0.5, type: "spring", stiffness: 200 }}
                 whileHover={{ scale: 1.05 }}
               >
-                {worker.available ? '● Available' : 'Busy'}
+                {isAvailable ? '● Available' : 'Busy'}
               </motion.span>
             </div>
           </div>
@@ -100,13 +113,17 @@ export function WorkerDetailScreen({ workerId, onRequestService, onBack }: Worke
                 </svg>
               </motion.div>
               <div>
-                <div className="text-[#1A2238]">{worker.rating}</div>
+                <div className="text-[#1A2238]">{displayRating}</div>
                 <div className="text-xs text-[#2E2E2E] opacity-70">Rating</div>
               </div>
             </div>
             <div>
-              <div className="text-[#1A2238]">{worker.experience} years</div>
+              <div className="text-[#1A2238]">{displayExp} years</div>
               <div className="text-xs text-[#2E2E2E] opacity-70">Experience</div>
+            </div>
+            <div>
+              <div className="text-[#1A2238]">{displayJobs}</div>
+              <div className="text-xs text-[#2E2E2E] opacity-70">Jobs Done</div>
             </div>
           </motion.div>
         </motion.div>
@@ -121,7 +138,7 @@ export function WorkerDetailScreen({ workerId, onRequestService, onBack }: Worke
           <h3 className="text-[#1A2238] mb-3">Services Offered</h3>
           <div className="bg-white rounded-2xl p-4">
             <ul className="space-y-2">
-              {worker.services.map((service, index) => (
+              {displayServices.map((service, index) => (
                 <motion.li
                   key={index}
                   className="flex items-start gap-2"
@@ -163,7 +180,7 @@ export function WorkerDetailScreen({ workerId, onRequestService, onBack }: Worke
         >
           <h3 className="text-[#1A2238] mb-3">About</h3>
           <div className="bg-white rounded-2xl p-4">
-            <p className="text-[#2E2E2E]">{worker.about}</p>
+            <p className="text-[#2E2E2E]">{displayBio}</p>
           </div>
         </motion.div>
 
